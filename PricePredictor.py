@@ -12,12 +12,13 @@ import matplotlib.pyplot as plt
 from itertools import cycle
 import plotly.express as px
 
+# Reading in the data as a dataframe
 maindf = pd.read_csv('BTC-USD.csv')
 
 # Taking all of the closing prices
 closedf = maindf[['Date','Close']]
 
-# Plotting this
+# Plotting these closing prices
 fig = px.line(closedf, x=closedf.Date, y=closedf.Close,labels={'date':'Date','close':'Close Stock'})
 fig.update_traces(marker_line_width=2, opacity=0.8, marker_line_color='orange')
 fig.update_layout(title_text='Whole period of timeframe of Bitcoin close price 2014-2022', plot_bgcolor='white', 
@@ -51,7 +52,7 @@ train_data,test_data=closedf[0:training_size,:],closedf[training_size:len(closed
 def create_dataset(dataset, time_step=1):
     dataX, dataY = [], []
     for i in range(len(dataset)-time_step-1):
-        a = dataset[i:(i+time_step), 0]   ###i=0, 0,1,2,3-----99   100 
+        a = dataset[i:(i+time_step), 0]
         dataX.append(a)
         dataY.append(dataset[i + time_step, 0])
     return np.array(dataX), np.array(dataY)
