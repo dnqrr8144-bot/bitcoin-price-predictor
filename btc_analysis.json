@@ -1,0 +1,26 @@
+{
+  "ticker": "BTC-USD",
+  "timestamp": "2025-09-20 20:15:59 UTC",
+  "scores": {
+    "XGBoost": 0.3008047640323639,
+    "LSTM": 0.8737904784020152,
+    "GRU": 0.4050080014707301,
+    "Prophet": 1.0,
+    "ARIMA_GARCH": 0.3078438672919639,
+    "MonteCarlo": 0.555,
+    "Technical": 0.45,
+    "Fundamental": 0.65
+  },
+  "final_score": 0.5869546354366817,
+  "decision": "Hold",
+  "weights_used": {
+    "XGBoost": 0.2,
+    "LSTM": 0.2,
+    "GRU": 0.15,
+    "Prophet": 0.15,
+    "ARIMA_GARCH": 0.1,
+    "MonteCarlo": 0.1,
+    "Technical": 0.05,
+    "Fundamental": 0.05
+  }
+}
