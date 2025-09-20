@@ -12,6 +12,18 @@ import matplotlib.pyplot as plt
 from itertools import cycle
 import plotly.express as px
 
+# Import NVDA hybrid predictor if available
+try:
+    from nvda_hybrid_predictor import NVDAHybridPredictor
+    NVDA_AVAILABLE = True
+except ImportError:
+    try:
+        from nvda_lite_test import NVDALitePredictor
+        NVDA_AVAILABLE = "LITE"
+    except ImportError:
+        NVDA_AVAILABLE = False
+        print("NVDA analysis not available - missing dependencies")
+
 # Reading in the data as a dataframe
 maindf = pd.read_csv('BTC-USD.csv')
 
@@ -131,3 +143,30 @@ fig.for_each_trace(lambda t:  t.update(name = next(names)))
 fig.update_xaxes(showgrid=False)
 fig.update_yaxes(showgrid=False)
 fig.show()
+
+# NVDA Hybrid Analysis Integration
+print("\n" + "=" * 60)
+print("NVDA HYBRID STOCK ANALYSIS")
+print("=" * 60)
+
+if NVDA_AVAILABLE == True:
+    print("Running full NVDA hybrid analysis with all models...")
+    nvda_predictor = NVDAHybridPredictor()
+    nvda_recommendation = nvda_predictor.run_complete_analysis()
+elif NVDA_AVAILABLE == "LITE":
+    print("Running lightweight NVDA analysis (demo mode)...")
+    nvda_predictor = NVDALitePredictor()
+    nvda_recommendation = nvda_predictor.run_analysis()
+else:
+    print("NVDA analysis not available - install requirements.txt for full functionality")
+    nvda_recommendation = None
+
+if nvda_recommendation:
+    print("\n" + "=" * 60)
+    print("COMBINED ANALYSIS SUMMARY")
+    print("=" * 60)
+    print("Bitcoin LSTM Analysis completed above")
+    print(f"NVDA Recommendation: {nvda_recommendation['recommendation']}")
+    print(f"NVDA Target Price: ${nvda_recommendation['ensemble_prediction']:.2f}")
+    print(f"NVDA Expected Change: {nvda_recommendation['expected_change']:.2%}")
+    print("=" * 60)
