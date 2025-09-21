@@ -356,6 +356,149 @@ def model_fundamental_stub(override=None, debug=False):
         print(f"[DEBUG][Fundamental] score={val:.4f} (override={override})")
     return val
 
+def model_hmm(df, debug=False):
+    """
+    Hidden Markov Model - מודל מארקוב סמוי לזיהוי מצבי שוק.
+    מתאים במיוחד לטווח קצר (30 יום) לזיהוי שינויי מצבים חדים בשוק.
+    """
+    try:
+        from sklearn.mixture import GaussianMixture
+        
+        # Prepare features - price changes and volatility
+        returns = df['Close'].pct_change().dropna()
+        volatility = returns.rolling(window=5).std().dropna()
+        
+        # Combine features for HMM
+        features = np.column_stack([returns[-len(volatility):], volatility])
+        features = features[~np.isnan(features).any(axis=1)]
+        
+        if len(features) < 10:
+            if debug:
+                print("[DEBUG][HMM] Insufficient data, returning neutral score")
+            return 0.5
+        
+        # Fit Gaussian Mixture Model as HMM approximation with 2 states
+        model = GaussianMixture(n_components=2, random_state=42)
+        model.fit(features)
+        
+        # Predict current market state
+        current_features = features[-1:] 
+        state_probs = model.predict_proba(current_features)[0]
+        
+        # Get current state characteristics
+        states = model.predict(features)
+        recent_state = states[-1]
+        
+        # Analyze if current state suggests upward movement
+        # State with higher mean return gets higher score
+        state_returns = []
+        for state in range(2):
+            state_mask = states == state
+            if np.sum(state_mask) > 0:
+                state_returns.append(np.mean(features[state_mask, 0]))  # mean return for this state
+            else:
+                state_returns.append(0)
+        
+        # Score based on which state is more bullish and current probability
+        if state_returns[0] > state_returns[1]:
+            # State 0 is more bullish
+            score = 0.5 + (state_probs[0] * 0.4)  # Max 0.9
+        else:
+            # State 1 is more bullish
+            score = 0.5 + (state_probs[1] * 0.4)  # Max 0.9
+            
+        # Adjust based on recent trend
+        recent_trend = np.mean(returns[-5:])
+        if recent_trend > 0:
+            score = min(1.0, score + 0.1)
+        else:
+            score = max(0.0, score - 0.1)
+            
+        score = float(np.clip(score, 0, 1))
+        
+        if debug:
+            print(f"[DEBUG][HMM] states={len(set(states))}, current_state={recent_state}, "
+                  f"state_probs={state_probs}, score={score:.4f}")
+        return score
+        
+    except Exception as e:
+        if debug:
+            print(f"[DEBUG][HMM] Exception -> {e}, returning neutral score")
+        return 0.5
+
+def model_factor_models(df, debug=False):
+    """
+    Factor Models - מודלים מבוססי גורמים (Fama-French style).
+    מתאים במיוחד לטווח ארוך (90 יום) לחיזוי מגמות על בסיס גורמים מרובים.
+    """
+    try:
+        # Simple factor model implementation using multiple regression
+        from sklearn.linear_model import LinearRegression
+        
+        # Create factors
+        returns = df['Close'].pct_change().dropna()
+        
+        # Market factor (overall market movement)
+        market_factor = returns.rolling(window=20).mean().dropna()
+        
+        # Size factor (volume-based)
+        volume_factor = (df['Volume'].pct_change().rolling(window=20).mean()).dropna()
+        
+        # Momentum factor
+        momentum_factor = returns.rolling(window=10).sum().dropna()
+        
+        # Volatility factor
+        volatility_factor = returns.rolling(window=20).std().dropna()
+        
+        # Align all factors to same length
+        min_len = min(len(market_factor), len(volume_factor), len(momentum_factor), len(volatility_factor))
+        if min_len < 30:
+            if debug:
+                print("[DEBUG][FactorModels] Insufficient data, returning neutral score")
+            return 0.5
+        
+        # Take last min_len observations
+        target_returns = returns[-min_len+1:]  # Next period returns
+        factors = np.column_stack([
+            market_factor[-min_len:-1],
+            volume_factor[-min_len:-1], 
+            momentum_factor[-min_len:-1],
+            volatility_factor[-min_len:-1]
+        ])
+        
+        # Remove any rows with NaN
+        valid_mask = ~np.isnan(factors).any(axis=1) & ~np.isnan(target_returns.values)
+        factors = factors[valid_mask]
+        target_returns = target_returns.values[valid_mask]
+        
+        if len(factors) < 20:
+            if debug:
+                print("[DEBUG][FactorModels] Insufficient clean data, returning neutral score")
+            return 0.5
+        
+        # Fit factor model
+        model = LinearRegression()
+        model.fit(factors[:-1], target_returns[1:])  # Predict next return from current factors
+        
+        # Predict next period return
+        current_factors = factors[-1:] 
+        predicted_return = model.predict(current_factors)[0]
+        
+        # Convert prediction to score
+        # Positive return -> score > 0.5, negative return -> score < 0.5
+        score = 0.5 + np.tanh(predicted_return * 10) * 0.4  # Scale and bound to [0.1, 0.9]
+        score = float(np.clip(score, 0, 1))
+        
+        if debug:
+            print(f"[DEBUG][FactorModels] predicted_return={predicted_return:.6f}, "
+                  f"r2_score={model.score(factors[:-1], target_returns[1:]):.4f}, score={score:.4f}")
+        return score
+        
+    except Exception as e:
+        if debug:
+            print(f"[DEBUG][FactorModels] Exception -> {e}, returning neutral score")
+        return 0.5
+
 
 # =========================
 # Weighting & Classification
@@ -370,6 +513,70 @@ DEFAULT_WEIGHTS = {
     "Technical":   0.15,
     "Fundamental": 0.15
 }
+
+# Time horizon specific weights based on empirical research
+# 30 days: ARIMA-GARCH, LSTM, HMM - focus on volatility and short-term patterns
+TIME_HORIZON_WEIGHTS_30 = {
+    "ARIMA_GARCH": 0.35,  # Most effective for short-term with volatility modeling
+    "LSTM":        0.30,  # Good for capturing non-linear short-term patterns
+    "HMM":         0.25,  # Effective for detecting sharp market state changes
+    "Technical":   0.10,  # Support from technical indicators
+    "XGBoost":     0.00,  # Less effective for very short term
+    "GRU":         0.00,  # Less effective than LSTM for short term
+    "Prophet":     0.00,  # Not optimal for short-term predictions
+    "MonteCarlo":  0.00,  # Less reliable for short term
+    "Fundamental": 0.00   # Fundamentals less relevant for 30-day predictions
+}
+
+# 60 days: LSTM, XGBoost, ARIMA-GARCH - medium-term with long-term dependencies
+TIME_HORIZON_WEIGHTS_60 = {
+    "LSTM":        0.40,  # Excellent for medium-term dependencies
+    "XGBoost":     0.25,  # Strong performance with external factors
+    "ARIMA_GARCH": 0.20,  # Still useful but less than LSTM
+    "Technical":   0.10,  # Technical analysis support
+    "Fundamental": 0.05,  # Some fundamental influence
+    "HMM":         0.00,  # Less effective for medium term
+    "GRU":         0.00,  # LSTM preferred for this timeframe
+    "Prophet":     0.00,  # Not optimal for this specific horizon
+    "MonteCarlo":  0.00   # Less reliable for this timeframe
+}
+
+# 90 days: Factor Models, LSTM, XGBoost - longer-term trends and multiple factors
+TIME_HORIZON_WEIGHTS_90 = {
+    "FactorModels": 0.35, # Most effective for longer-term trend prediction
+    "LSTM":         0.30, # Strong for long-term prediction as well
+    "XGBoost":      0.20, # Good with many external variables
+    "Fundamental":  0.10, # Fundamentals become more relevant
+    "Technical":    0.05, # Some technical support
+    "ARIMA_GARCH":  0.00, # Less effective for longer terms
+    "HMM":          0.00, # Not suitable for long-term predictions
+    "GRU":          0.00, # LSTM preferred
+    "Prophet":      0.00, # Not optimal for this horizon
+    "MonteCarlo":   0.00  # Less reliable for longer term
+}
+
+def get_time_horizon_weights(time_horizon, debug=False):
+    """
+    Get the appropriate weights based on time horizon.
+    """
+    if time_horizon == 30:
+        weights = TIME_HORIZON_WEIGHTS_30.copy()
+        if debug:
+            print(f"[DEBUG] Using 30-day time horizon weights (ARIMA-GARCH, LSTM, HMM focus)")
+    elif time_horizon == 60:
+        weights = TIME_HORIZON_WEIGHTS_60.copy()
+        if debug:
+            print(f"[DEBUG] Using 60-day time horizon weights (LSTM, XGBoost, ARIMA-GARCH focus)")
+    elif time_horizon == 90:
+        weights = TIME_HORIZON_WEIGHTS_90.copy()
+        if debug:
+            print(f"[DEBUG] Using 90-day time horizon weights (Factor Models, LSTM, XGBoost focus)")
+    else:
+        weights = DEFAULT_WEIGHTS.copy()
+        if debug:
+            print(f"[DEBUG] Using default weights (no specific time horizon)")
+    
+    return weights
 
 def normalize_weights(wdict, debug=False):
     s = sum(wdict.values())
@@ -401,9 +608,16 @@ def run_single(ticker: str,
                fundamental_override=None,
                custom_weights=None,
                debug=False,
-               use_csv_data=None):
+               use_csv_data=None,
+               time_horizon=None):
 
-    weights = custom_weights if custom_weights else DEFAULT_WEIGHTS
+    # Select appropriate weights based on time horizon or custom weights
+    if custom_weights:
+        weights = custom_weights
+    elif time_horizon:
+        weights = get_time_horizon_weights(time_horizon, debug=debug)
+    else:
+        weights = DEFAULT_WEIGHTS
     weights = normalize_weights(weights, debug=debug)
 
     print(f"\n--- הורדת נתונים: {ticker} period={period} interval={interval} ---")
@@ -471,6 +685,10 @@ def run_single(ticker: str,
     safe_run('MonteCarlo', lambda: model_monte_carlo(df, sims=mc_sims, debug=debug))
     safe_run('Technical', lambda: model_technical(df, debug=debug))
     safe_run('Fundamental', lambda: model_fundamental_stub(fundamental_override, debug=debug))
+    
+    # New time-horizon specific models
+    safe_run('HMM', lambda: model_hmm(df, debug=debug))
+    safe_run('FactorModels', lambda: model_factor_models(df, debug=debug))
 
     # Weighted aggregation
     total = 0
@@ -494,6 +712,7 @@ def run_single(ticker: str,
     result = {
         "ticker": ticker,
         "timestamp": ts,
+        "time_horizon": time_horizon,
         "scores": scores,
         "final_score": final_score,
         "decision": decision,
@@ -503,8 +722,25 @@ def run_single(ticker: str,
 
 def print_report(result: dict):
     print("\n===== תוצאות מודלים =====")
+    time_horizon = result.get('time_horizon')
+    if time_horizon:
+        if time_horizon == 30:
+            focus_models = "ARIMA-GARCH, LSTM, HMM"
+        elif time_horizon == 60:
+            focus_models = "LSTM, XGBoost, ARIMA-GARCH"
+        elif time_horizon == 90:
+            focus_models = "Factor Models, LSTM, XGBoost"
+        print(f"Time Horizon: {time_horizon} days (Focus: {focus_models})")
+        print("-------------------------")
+    
     for k,v in sorted(result['scores'].items(), key=lambda x: x[0]):
-        print(f"{k:12s}: {v:.4f}")
+        weight = result['weights_used'].get(k, 0)
+        if weight is None:
+            weight = 0
+        if weight > 0:
+            print(f"{k:12s}: {v:.4f} (weight: {weight:.2f})")
+        else:
+            print(f"{k:12s}: {v:.4f} (not used)")
     print("-------------------------")
     print(f"Final Ensemble Score: {result['final_score']:.4f}")
     print(f"Recommendation: {result['decision']}")
@@ -537,6 +773,7 @@ def main():
     parser.add_argument("--save_json", type=str, default=None, help="שמור תוצאה כ-JSON")
     parser.add_argument("--debug", action="store_true", help="הדפסות DEBUG מפורטות")
     parser.add_argument("--use_csv", action="store_true", help="Use local CSV data instead of downloading")
+    parser.add_argument("--time_horizon", type=int, choices=[30, 60, 90], default=None, help="Time horizon for prediction focus: 30 (short), 60 (medium), 90 (longer-short) days")
     args = parser.parse_args()
 
     # custom weights parsing
@@ -558,7 +795,8 @@ def main():
         fundamental_override=args.fundamental_override,
         custom_weights=custom_weights,
         debug=args.debug,
-        use_csv_data=args.use_csv
+        use_csv_data=args.use_csv,
+        time_horizon=args.time_horizon
     )
     print_report(result)
 
