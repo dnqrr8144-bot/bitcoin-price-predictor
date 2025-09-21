@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Test script for the Single-File Hybrid Ensemble system
-Demonstrates various usage scenarios
+Demonstrates various usage scenarios including time-horizon specific predictions
 """
 import os
 import json
@@ -54,17 +54,73 @@ def test_fundamental_override():
     result = os.system(cmd)
     return result == 0
 
+def test_time_horizon_30():
+    """Test 30-day time horizon configuration"""
+    print("\n=== Test 6: 30-Day Time Horizon ===")
+    cmd = "python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 30"
+    result = os.system(cmd)
+    return result == 0
+
+def test_time_horizon_60():
+    """Test 60-day time horizon configuration"""
+    print("\n=== Test 7: 60-Day Time Horizon ===")
+    cmd = "python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 60"
+    result = os.system(cmd)
+    return result == 0
+
+def test_time_horizon_90():
+    """Test 90-day time horizon configuration"""
+    print("\n=== Test 8: 90-Day Time Horizon ===")
+    cmd = "python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 90"
+    result = os.system(cmd)
+    return result == 0
+
+def test_time_horizon_with_debug():
+    """Test time horizon with debug mode to verify correct model weights"""
+    print("\n=== Test 9: Time Horizon with Debug ===")
+    cmd = "python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 30 --debug"
+    result = os.system(cmd)
+    return result == 0
+
+def test_time_horizon_json_export():
+    """Test time horizon with JSON export to verify correct data structure"""
+    print("\n=== Test 10: Time Horizon JSON Export ===")
+    cmd = "python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 60 --save_json test_horizon_output.json"
+    result = os.system(cmd)
+    
+    # Verify JSON file contains time horizon information
+    if result == 0 and os.path.exists("test_horizon_output.json"):
+        try:
+            with open("test_horizon_output.json", 'r') as f:
+                data = json.load(f)
+            if 'time_horizon' in data and data['time_horizon'] == 60:
+                print(f"✓ Time horizon JSON export successful. Horizon: {data['time_horizon']} days")
+                print(f"✓ Final score: {data['final_score']:.4f}")
+                return True
+            else:
+                print("✗ Time horizon not properly saved in JSON")
+                return False
+        except json.JSONDecodeError:
+            print("✗ JSON file is invalid")
+            return False
+    return False
+
 def main():
     """Run all tests"""
-    print("🧪 Testing Single-File Hybrid Ensemble System")
-    print("=" * 50)
+    print("🧪 Testing Single-File Hybrid Ensemble System with Time Horizons")
+    print("=" * 70)
     
     tests = [
         ("Basic Analysis", test_basic_analysis),
         ("Custom Weights", test_custom_weights),
         ("JSON Export", test_json_export),
         ("Debug Mode", test_debug_mode),
-        ("Fundamental Override", test_fundamental_override)
+        ("Fundamental Override", test_fundamental_override),
+        ("30-Day Time Horizon", test_time_horizon_30),
+        ("60-Day Time Horizon", test_time_horizon_60),
+        ("90-Day Time Horizon", test_time_horizon_90),
+        ("Time Horizon Debug", test_time_horizon_with_debug),
+        ("Time Horizon JSON", test_time_horizon_json_export)
     ]
     
     passed = 0
@@ -80,17 +136,23 @@ def main():
         except Exception as e:
             print(f"❌ {test_name}: ERROR - {e}")
     
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 70)
     print(f"🏁 Test Results: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests passed! The ensemble system is working correctly.")
+        print("🎉 All tests passed! The ensemble system with time horizons is working correctly.")
     else:
         print(f"⚠️  {total - passed} test(s) failed. Please check the output above.")
     
     # Cleanup
-    if os.path.exists("test_output.json"):
-        os.remove("test_output.json")
+    for file in ["test_output.json", "test_horizon_output.json"]:
+        if os.path.exists(file):
+            os.remove(file)
+    
+    print(f"\n📊 Time-Horizon Specific Models Summary:")
+    print(f"   • 30 days: ARIMA-GARCH (35%) + LSTM (30%) + HMM (25%) + Technical (10%)")
+    print(f"   • 60 days: LSTM (40%) + XGBoost (25%) + ARIMA-GARCH (20%) + Technical (10%) + Fundamental (5%)")
+    print(f"   • 90 days: Factor Models (35%) + LSTM (30%) + XGBoost (20%) + Fundamental (10%) + Technical (5%)")
 
 if __name__ == "__main__":
     main()

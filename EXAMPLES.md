@@ -30,12 +30,47 @@ Timestamp: 2025-09-20 20:17:42 UTC
 (אין באמור ייעוץ השקעות / Educational Only)
 ```
 
-### 2. Custom Model Weights
+### 2. Time-Horizon Specific Analysis
+
+#### Short-term prediction (30 days)
+Focuses on ARIMA-GARCH, LSTM, and HMM models for detecting short-term volatility and market state changes:
+```bash
+python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 30
+```
+
+**Output:**
+```
+===== תוצאות מודלים =====
+Time Horizon: 30 days (Focus: ARIMA-GARCH, LSTM, HMM)
+-------------------------
+ARIMA_GARCH : 0.3078 (weight: 0.35)
+HMM         : 0.6700 (weight: 0.25)
+LSTM        : 0.7891 (weight: 0.30)
+Technical   : 0.4500 (weight: 0.10)
+[Other models]: (not used)
+-------------------------
+Final Ensemble Score: 0.5570
+Recommendation: Hold
+```
+
+#### Medium-term prediction (60 days)
+Focuses on LSTM, XGBoost, and ARIMA-GARCH for capturing medium-term dependencies:
+```bash
+python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 60
+```
+
+#### Longer-short term prediction (90 days)
+Focuses on Factor Models, LSTM, and XGBoost for trend prediction with multiple factors:
+```bash
+python single_ensemble.py --ticker BTC-USD --use_csv --fast --time_horizon 90
+```
+
+### 3. Custom Model Weights
 ```bash
 python single_ensemble.py --ticker BTC-USD --use_csv --fast --weights '{"XGBoost":0.25,"LSTM":0.25,"Technical":0.25,"Fundamental":0.25}'
 ```
 
-### 3. Debug Mode Analysis
+### 4. Debug Mode Analysis
 ```bash
 python single_ensemble.py --ticker BTC-USD --use_csv --fast --debug
 ```
@@ -106,6 +141,7 @@ python single_ensemble.py --ticker BTC-USD --use_csv --fast --weights '{"Technic
 
 ## Model Descriptions
 
+### Default Model Weights (when no time horizon is specified)
 | Model | Weight | Description |
 |-------|--------|-------------|
 | **XGBoost** | 15% | Binary classification predicting price direction |
@@ -116,6 +152,27 @@ python single_ensemble.py --ticker BTC-USD --use_csv --fast --weights '{"Technic
 | **Monte Carlo** | 10% | Stochastic simulation of price movements |
 | **Technical** | 15% | RSI, MACD indicators with rule-based logic |
 | **Fundamental** | 15% | Configurable fundamental analysis score |
+
+### Time-Horizon Specific Models
+| Model | Description | Best For |
+|-------|-------------|----------|
+| **HMM** | Hidden Markov Model for detecting market state changes | 30-day short-term predictions |
+| **Factor Models** | Multi-factor regression model (Fama-French style) | 90-day longer-term trend prediction |
+
+### Time Horizon Configurations
+| Horizon | Focus Models | Rationale |
+|---------|--------------|-----------|
+| **30 days** | ARIMA-GARCH (35%), LSTM (30%), HMM (25%) | Volatility modeling and short-term pattern detection |
+| **60 days** | LSTM (40%), XGBoost (25%), ARIMA-GARCH (20%) | Medium-term dependencies with external factors |
+| **90 days** | Factor Models (35%), LSTM (30%), XGBoost (20%) | Long-term trends with fundamental factors |
+
+### Interpreting Time-Horizon Results
+
+**30-Day Results**: Focus on immediate market volatility and state changes. The HMM model helps detect sudden market regime shifts, while ARIMA-GARCH captures short-term volatility patterns.
+
+**60-Day Results**: Balanced approach combining pattern recognition (LSTM) with feature-based predictions (XGBoost). Good for medium-term investment decisions.
+
+**90-Day Results**: Emphasizes fundamental factors and longer-term trends. Factor Models analyze multiple market influences while LSTM captures long-term dependencies.
 
 ## Investment Recommendation Scale
 
@@ -142,6 +199,10 @@ python single_ensemble.py --ticker BTC-USD --use_csv --fast --weights '{"Technic
 --weights WEIGHTS                 Custom JSON model weights
 --save_json SAVE_JSON             Export results to JSON file
 --fundamental_override OVERRIDE   Override fundamental score (0-1)
+--time_horizon {30,60,90}         Time horizon for prediction focus:
+                                    30 = Short-term (ARIMA-GARCH, LSTM, HMM)
+                                    60 = Medium-term (LSTM, XGBoost, ARIMA-GARCH)
+                                    90 = Longer-short term (Factor Models, LSTM, XGBoost)
 ```
 
 ## Testing

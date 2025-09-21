@@ -5,7 +5,8 @@ This repository contains a comprehensive Bitcoin price prediction system with bo
 ## 🌟 Features
 
 ### New: Single-File Hybrid Ensemble System (single_ensemble.py)
-- **8 AI Models in One**: XGBoost, LSTM, GRU, Prophet, ARIMA+GARCH, Monte Carlo, Technical Analysis, Fundamental Analysis  
+- **10 AI Models in One**: XGBoost, LSTM, GRU, Prophet, ARIMA+GARCH, Monte Carlo, Technical Analysis, Fundamental Analysis, HMM, Factor Models
+- **Time-Horizon Specific Predictions**: 30-day (short), 60-day (medium), 90-day (longer-short) optimized configurations
 - **Command-Line Interface** with extensive configuration options
 - **Weighted Ensemble Scoring** (0-1 scale) with customizable model weights
 - **Multi-Ticker Support** - analyze any stock/crypto, not just Bitcoin
@@ -43,6 +44,11 @@ pip install -r requirements.txt
 # Analyze Bitcoin using local CSV data (fast mode)
 python single_ensemble.py --ticker BTC-USD --use_csv --fast
 
+# Time-horizon specific predictions
+python single_ensemble.py --ticker BTC-USD --use_csv --time_horizon 30  # Short-term (30 days)
+python single_ensemble.py --ticker BTC-USD --use_csv --time_horizon 60  # Medium-term (60 days)  
+python single_ensemble.py --ticker BTC-USD --use_csv --time_horizon 90  # Longer-short term (90 days)
+
 # Analyze any stock with debug output
 python single_ensemble.py --ticker AAPL --debug
 
@@ -64,9 +70,16 @@ python single_ensemble.py --ticker MSFT --fundamental_override 0.75 --debug
 --weights         Custom JSON model weights
 --save_json       Export results to JSON file
 --fundamental_override  Override fundamental score (0-1)
+--time_horizon    Time horizon for prediction focus: 30, 60, 90 days
 --lookback        LSTM/GRU sequence length (default: 80)
 --epochs_lstm     LSTM training epochs (default: 6)  
 --epochs_gru      GRU training epochs (default: 6)
+```
+
+**Time Horizon Models:**
+- **30 days**: ARIMA-GARCH (35%) + LSTM (30%) + HMM (25%) - Short-term volatility focus
+- **60 days**: LSTM (40%) + XGBoost (25%) + ARIMA-GARCH (20%) - Medium-term dependencies  
+- **90 days**: Factor Models (35%) + LSTM (30%) + XGBoost (20%) - Long-term trends
 ```
 
 ### Model Descriptions
